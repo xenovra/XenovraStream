@@ -1,40 +1,60 @@
 ![xenovradrive-github-logo](https://github.com/Xenovra/XenovraDrive/assets/55978340/db39e76f-4119-41c1-bbfd-9b59f40ab626)
 
-[<img alt="GitHub Workflow Status (with event)" src="https://img.shields.io/github/actions/workflow/status/Xenovra/XenovraDrive/docker-image.yml?style=plastic&logo=github">](https://github.com/Xenovra/XenovraDrive/actions)
+[<img alt="GitHub Workflow Status (with event)" src="https://img.shields.io/github/actions/workflow/status/xenovra/XenovraDrive/docker-image.yml?style=plastic&logo=github">](https://github.com/xenovra/XenovraDrive/actions)
+[<img alt="Latest release" src="https://img.shields.io/github/v/release/xenovra/XenovraDrive?style=plastic&logo=github&color=success">](https://github.com/xenovra/XenovraDrive/releases)
 [<img alt="Dockerhub latest" src="https://img.shields.io/badge/dockerhub-latest-blue?logo=docker&style=plastic">](https://hub.docker.com/r/xenovra/xenovradrive)
+[<img alt="GitHub Packages" src="https://img.shields.io/badge/ghcr.io-latest-24292e?logo=github&style=plastic">](https://github.com/xenovra/XenovraDrive/pkgs/container/xenovradrive)
 [<img alt="Docker Image Size (tag)" src="https://img.shields.io/docker/image-size/xenovra/xenovradrive/latest?style=plastic&logo=docker&color=gold">](https://hub.docker.com/r/xenovra/xenovradrive/tags?page=1&name=latest)
-[<img alt="Any platform" src="https://img.shields.io/badge/platform-any-green?style=plastic&logo=linux&logoColor=white">](https://github.com/Xenovra/XenovraDrive)
+[<img alt="Any platform" src="https://img.shields.io/badge/platform-any-green?style=plastic&logo=linux&logoColor=white">](https://github.com/xenovra/XenovraDrive)
 
-_Cloud storage system based on using Telegram as a storage so it doesn't use your server filesystem or any other paid cloud storage system underneath the hood._
+_Lightweight, self-hosted cloud storage that uses **Telegram** as its storage backend — so it doesn't consume your server filesystem or any paid cloud storage underneath the hood._
 
-https://github.com/Xenovra/XenovraDrive/assets/55978340/b62305a7-cae3-4e1c-a509-38e415392dcf
+XenovraDrive is aimed to take as small disk space as possible. It does not need any code interpreter/platform to run — the whole app is a **`FROM scratch` binary just a few megabytes in size**. It uses Postgres as a database and tries hard to economize space by not creating unneeded fields and tables and by picking proper datatypes.
 
-XenovraDrive is aimed to take as small disk space as possible. So it does not need any code interpreter/platform to run. The whole app is just several megabytes in size. It also uses Postgres as a database and we try our best to economy space by not creating unneeded fields and tables and to wisely pick proper datatypes.
+The platform can be used as a personal drive (on your own server or a local machine) or as a multi-user platform with multiple storages. Since it also exposes a REST API, you can use it as a storage layer in your backend, similar to [NextCloud](https://nextcloud.com/), [AWS S3](https://aws.amazon.com/s3/) or S3-compatible services like [MinIO](https://min.io/).
 
-The platform itself can be used differently, like as a personal (on your own server or a local machine) platform or a platform for many users with multiple storages and so on. Since it provides Rest API, you can also use it as a file system in your backend like [NextCloud](https://nextcloud.com/) or [AWS S3](https://aws.amazon.com/s3/) or S3 compatable services (like [MinIO](https://min.io/)), but for now it's so early so I don't recommend to use it in production ready apps.
+## ✨ Features
 
-# Installation
+- **Telegram-backed storage** — files are split into chunks and stored in a Telegram channel through a bot, so you pay nothing for storage.
+- **Unlimited file size** — files are chunked on upload and reassembled on download, working around Telegram's per-file limit.
+- **Clean, modern web UI** (SolidJS) — responsive interface with folders, file/folder info, and a polished light theme.
+- **Live upload progress bar** — real-time browser→server progress, then a "processing" state while the server forwards the file to Telegram.
+- **Delete syncs to Telegram** — removing a file (or a whole folder) also deletes its underlying messages from the Telegram channel, so nothing is left behind.
+- **Per-user access control** — grant, change or revoke access to a storage per user (Viewer / Can edit / Admin).
+- **Multiple storage workers** — add more Telegram bots to a storage to work around per-bot rate limits and upload/download faster.
+- **JWT authentication** with automatic superuser bootstrap on first run.
+- **Tiny & portable** — a multi-megabyte static image that runs anywhere Docker does; published to both Docker Hub and GitHub Packages.
 
-This project is aimed on running the app in container, so the primary way to run it is via [Docker](https://www.docker.com/). If you don't have it installed or simply don't want to run the app via Docker, you can build it from source.
+## 🚀 Installation
 
-> NOTE: XenovraDrive uses [Postgres](https://www.postgresql.org/) as a database. So if you are going to run it from source or run the XenovraDrive image only, you will need to have a Postgres instance running and available in your network so you will connect your XenovraDrive app to it
+This project is aimed at running the app in a container, so the primary way to run it is via [Docker](https://www.docker.com/). You can also build it from source.
 
-<details>
-  <summary>Docker Compose with pre-built image <i>(recommended)</i></summary>
+> **NOTE:** XenovraDrive uses [Postgres](https://www.postgresql.org/) as a database. If you run it from source or run only the XenovraDrive image, you need a Postgres instance running and reachable on your network.
 
-The simplest way to run and manage the app
-
-1. Create new directory for the app files and name it however you wish:
+### Pull the image
 
 ```sh
-mkdir xenovradrive
+# GitHub Packages (ghcr.io)
+docker pull ghcr.io/xenovra/xenovradrive:latest
+
+# or Docker Hub
+docker pull xenovra/xenovradrive:latest
 ```
 
-2. Go to it and place `docker-compose.yml` file like this one:
+<details>
+  <summary><b>Docker Compose with pre-built image</b> <i>(recommended)</i></summary>
+
+The simplest way to run and manage the app.
+
+1. Create a directory for the app and enter it:
+
+```sh
+mkdir xenovradrive && cd xenovradrive
+```
+
+2. Add a `docker-compose.yml`:
 
 ```yaml
-version: "3.9"
-
 volumes:
   xenovradrive-db-volume:
     name: xenovradrive-db-volume
@@ -42,7 +62,7 @@ volumes:
 services:
   xenovradrive:
     container_name: xenovradrive
-    image: xenovra/xenovradrive
+    image: ghcr.io/xenovra/xenovradrive:latest   # or xenovra/xenovradrive:latest
     env_file:
       - .env
     ports:
@@ -62,7 +82,7 @@ services:
       - xenovradrive-db-volume:/var/lib/postgresql/data
 ```
 
-And `.env` file like the next one. **Don't forget to set your superuser email, password and secret key**:
+3. Add a `.env` file. **Set your own superuser email, password and secret key**:
 
 ```env
 PORT=8000
@@ -82,200 +102,109 @@ DATABASE_HOST=db
 DATABASE_PORT=5432
 ```
 
-Secret key can be set by your hand, but I strongly recommend to use long randomly generated sequences. So you either can generate it via some free websites that provide such funcionallity or by running something like this in the terminal:
+Generate a strong secret key with:
 
 ```sh
 openssl rand -hex 32
 ```
 
-3. For now everything is set up so we can run our app:
+4. Run it:
 
 ```sh
 docker compose up -d
 ```
 
-To check if everything works fine you can go to http://localhost:8000 or to `http://<YOUR-PUBLIC-IP>:8000` if you run it on a server.
-
-If there are troubles, you can check the logs, there may be some errors:
-
-```sh
-docker logs -f xenovradrive
-```
+Open http://localhost:8000 (or `http://<YOUR-PUBLIC-IP>:8000` on a server) and sign in with your superuser credentials. Check logs with `docker logs -f xenovradrive`.
 
 </details>
 
 <details>
-  <summary>Docker Compose from source</summary>
+  <summary><b>Docker Compose from source</b></summary>
 
-Kind of simple way, but it's aimed to use it during development process
-
-1. Clone the repository and go inside the newly created directory:
+Aimed at the development process.
 
 ```sh
-git clone git@github.com:Xenovra/XenovraDrive.git
-```
-
-2. Copy `.env.example` to `.env`:
-
-```sh
-cp ./.env.example ./.env
-```
-
-and edit it like you wish.
-
-3. For now everything is set up so we can run our app:
-
-```sh
+git clone git@github.com:xenovra/XenovraDrive.git
+cd XenovraDrive
+cp ./.env.example ./.env   # then edit it
 make up
 ```
 
-To check if everything works fine you can go to http://localhost:8000 or to `http://<YOUR-PUBLIC-IP>:8000` if you run it on a server.
-
-If there are troubles, you can check the logs, there may be some errors:
-
-```sh
-docker logs -f xenovradrive
-```
+Open http://localhost:8000 and check logs with `docker logs -f xenovradrive`.
 
 </details>
 
 <details>
-  <summary>Docker with pre-built image</summary>
+  <summary><b>From source</b></summary>
 
-**TODO**
-
-</details>
-
-<details>
-  <summary>From source</summary>
-
-The most complex way to run the app.
-
-Requires the next stuff to be installed:
-
-- [Cargo](https://github.com/rust-lang/cargo)
-- [Node.js](https://nodejs.org/en)
-- [pnpm](https://pnpm.io/)
-- [Postgres](https://www.postgresql.org/)
-
-1. Create a directory to place all the app files wherever in your system:
+The most involved way. Requires [Cargo](https://github.com/rust-lang/cargo), [Node.js](https://nodejs.org/en), [pnpm](https://pnpm.io/) and [Postgres](https://www.postgresql.org/).
 
 ```sh
-mkdir ~/xenovradrive
+git clone git@github.com:xenovra/XenovraDrive.git
+cd XenovraDrive
+
+# build the server
+cd xenovradrive && cargo build --release && cd ..
+
+# build the UI
+cd ui && pnpm install && VITE_API_BASE=/api pnpm run build && cd ..
 ```
 
-2. Clone the repository and go inside the newly created directory:
-
-```sh
-git clone git@github.com:Xenovra/XenovraDrive.git
-```
-
-3. Go to the `./xenovradrive` directory and build server side app:
-
-```sh
-cd ./xenovradrive
-cargo build --release
-```
-
-and copy the target to the app directory (or create a soft link via `ln -s`, does not matter):
-
-```sh
-cp ./target/release/xenovradrive ~/xenovradrive/xenovradrive
-```
-
-4. Go to the `../ui` and build the UI side of the app:
-
-```sh
-cd ../ui
-pnpm run build
-```
-
-and copy built files into the app directory:
-
-```sh
-cp ./dist/* ~/xenovradrive/ui/
-```
-
-5. Now go to the app directory:
-
-```sh
-cd ~/xenovradrive
-```
-
-6. Make sure that you have Postgres database ran in your system (or available from network)
-7. Set all needed environment variables. You can check them in the [.env.example file](https://github.com/Xenovra/XenovraDrive/blob/main/.env.example). **Don't forget to set right Postgres credentials, host and port**:
-
-```sh
-export PORT=8000
-export WORKERS=4
-# ...
-```
-
-8. Finally run the app:
-
-```sh
-./xenovradrive
-```
-
-To check if everything works fine you can go to http://localhost:8000 or to `http://<YOUR-PUBLIC-IP>:8000` if you run it on a server.
+Serve the built UI (`ui/dist`) next to the binary, make sure Postgres is reachable, set the environment variables from [.env.example](https://github.com/xenovra/XenovraDrive/blob/main/.env.example), then run the `xenovradrive` binary.
 
 </details>
 
 <br/>
 
-It's also recommended to use a HTTP reverse-proxy, like [Nginx](https://www.nginx.com/) or [Traefik](https://traefik.io/traefik/) if you use containarized version of the app and don't wanna work with Nginx and certbot.
+It's recommended to put a HTTP reverse-proxy like [Nginx](https://www.nginx.com/) or [Traefik](https://traefik.io/traefik/) in front of the app for TLS.
 
-# Usage
+## 📖 Usage
 
-The platform is tied to the "storages" concept. Every storage is a separated files system, like different volumes on your drive. It provides funcionallity to work with a file system like it's Google Drive: you can create files and folders, download files, see files and folders info and delete them on your wish.
+The platform is built around the **"storage"** concept. Every storage is a separate file system, like different volumes on a drive — you can create files and folders, download files, view file/folder info and delete them, much like Google Drive. Each storage is backed by its own Telegram channel where the data actually lives.
 
-In our case every storage has its own Telegram channel, where it will store all the data.
+Storages use **"storage workers"** — Telegram bots that upload and download files through the Telegram API. Add the bot to your channel as an **administrator with permission to post and delete messages**.
 
-The platform also uses "storage workers". It is telegram bots that are used to upload and download files from the telegram API
+### Telegram API limitations & how XenovraDrive works around them
 
-## Telegram API limitations
+- **Rate limits (RPM):** add extra storage workers (bots) to a storage to spread the load and upload/download faster. One user can create up to 20 bots.
+- **File size:** Telegram caps single files, so XenovraDrive splits uploads into chunks, stores them separately, and reassembles them on download — allowing effectively unlimited file sizes.
 
-Telegram has its policy to limit some access to their platform. For us the main limitations are:
+### In-storage features
 
-- Requests per a period for one bot (RPM)
-- File size
-
-XenovraDrive has ways to workaround them:
-
-### RPM
-
-To workaround RPM users can create additional storage workers. For now one user can create up to 20 bots. You can also create additional accounts to create extra bots or ask your nearest for example to do so. This way from up to Telegram limitations it becomes up to you on how fast you can upload/download in XenovraDrive storage.
-
-I should notice that current RPM (20 requests per minute) is completely fine to work with a single storage worker if you need the storage to be your own and don't need to upload/download big files fast.
-
-### File size
-
-Currently Telegram API limits file download to 20 MB, hence we can't upload files more than that limit too.
-
-XenovraDrive divides uploaded files into chunks and save them to Telegram separately and on downloading a file it fetches all the file chunks from the Telegram API and combine them into one in the order it was divided in. That grants ability to upload and download files with almost unlimited size (it's like you've ever downloaded a file with size >10 GB).
-
-## Current in storage features
-
-- [x] Upload file
+- [x] Upload file (with live progress)
 - [x] Download file
 - [x] Create folder
-- [x] Get file/folder info
-- [x] Delete file/folder
+- [x] Get file / folder info
+- [x] Delete file / folder (also removes the data from Telegram)
 
-## Access
+### Access control
 
-You can manage access to your storages by granting access to other users. For now, there are 3 possible roles:
+Manage access to your storages by granting access to other users. Three roles are available:
 
-- Viewer
-- Can edit
-- Admin
+- **Viewer**
+- **Can edit**
+- **Admin**
 
-So you can grant access, change it or restrict (delete access) for other users.
+You can grant, change or revoke (delete) access for other users at any time.
 
-# Future plans
+## 🗺️ Future plans
 
-Cloud storage system has a huge variety of possible ways to develop in. Like it can be a file hosting service, a cloud object storage, a cloud drive or anything else or everything in one place. And I personally don't have idea right now where to move and what users need so I'd like to know what features you would like this app to provide.
+Planned and considered improvements (contributions welcome):
 
-# Contributing
+- [ ] Move / rename files and folders
+- [ ] Multi-file and drag-and-drop uploads
+- [ ] Resumable and parallel chunk transfers for higher throughput
+- [ ] Trash / recycle bin before permanent deletion
+- [ ] Search within a storage
+- [ ] File previews and thumbnails (images, video, PDF)
+- [ ] Public / password-protected share links
+- [ ] Dark mode for the web UI
+- [ ] Storage usage stats and quotas per user
+- [ ] Documented, stable public REST API + client SDKs
+- [ ] Optional S3-compatible API layer
 
-Is highly welcoming! Create issues or take existing ones and create PRs!
+Have an idea or a feature you'd like to see? Open an issue — feedback drives the roadmap.
+
+## 🤝 Contributing
+
+Highly welcome! Open issues or pick existing ones and send PRs.
