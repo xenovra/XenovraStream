@@ -1,28 +1,408 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="theme-color" content="#000000" />
-  <link rel="shortcut icon" type="image/ico" href="/src/assets/favicon.ico" />
-  <link href="https://fonts.googleapis.com/css?family=Roboto:300,400,500" rel="stylesheet" />
-  <title>XenovraDrive UI</title>
-
-  <style>
-    *,
-    html {
-      margin: 0;
-      padding: 0;
-    }
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>XenovraStream</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: #0b0d10;
+    color: #e8eaed;
+    font: 15px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  .wrap { max-width: 940px; margin: 0 auto; padding: 2rem 1rem 4rem; }
+  h1 { font-size: 1.4rem; margin: 0 0 .25rem; }
+  h2 { font-size: 1rem; margin: 0 0 .75rem; color: #c7ccd3; }
+  .sub { color: #9aa3ae; margin: 0 0 2rem; font-size: .9rem; }
+  .card {
+    background: #12151a;
+    border: 1px solid #232830;
+    border-radius: 10px;
+    padding: 1.1rem;
+    margin-bottom: 1.25rem;
+  }
+  label { display: block; font-size: .8rem; color: #9aa3ae; margin: .6rem 0 .25rem; }
+  input, select, button {
+    font: inherit;
+    border-radius: 7px;
+    border: 1px solid #2b3038;
+    background: #171a1f;
+    color: #e8eaed;
+    padding: .5rem .6rem;
+    width: 100%;
+  }
+  button {
+    background: #2f6feb;
+    border-color: #2f6feb;
+    cursor: pointer;
+    font-weight: 600;
+    margin-top: .9rem;
+  }
+  button:hover { background: #3b7bf7; }
+  button:disabled { opacity: .55; cursor: default; }
+  button.ghost { background: transparent; border-color: #2b3038; color: #c7ccd3; font-weight: 500; }
+  .row { display: flex; gap: .75rem; flex-wrap: wrap; }
+  .row > * { flex: 1; min-width: 180px; }
+  .hidden { display: none !important; }
+  .msg { font-size: .85rem; margin-top: .6rem; color: #9aa3ae; min-height: 1.2em; }
+  .msg.err { color: #ff8a8a; }
+  .msg.ok { color: #6fcf97; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: .55rem .4rem; border-bottom: 1px solid #232830; font-size: .88rem; }
+  th { color: #9aa3ae; font-weight: 500; font-size: .78rem; }
+  .pill {
+    font-size: .72rem;
+    padding: .12rem .45rem;
+    border-radius: 99px;
+    border: 1px solid currentColor;
+    white-space: nowrap;
+  }
+  .queued, .transcoding, .uploading { color: #e2b93b; }
+  .ready { color: #6fcf97; }
+  .failed { color: #ff8a8a; }
+  a { color: #6ea8ff; }
+  progress { width: 100%; height: 6px; }
+  .top { display: flex; justify-content: space-between; align-items: start; gap: 1rem; }
+  .top button { width: auto; margin: 0; padding: .35rem .7rem; }
+  code { background: #171a1f; padding: .1rem .3rem; border-radius: 4px; font-size: .85em; }
+</style>
 </head>
-
 <body>
-  <noscript>Wanna write ur own UI without js?! Go ahead, don't disturb others</noscript>
-  <div id="root"></div>
+<div class="wrap">
 
-  <script src="/src/index.jsx" type="module"></script>
+  <!-- login -->
+  <section id="login-view">
+    <h1>XenovraStream</h1>
+    <p class="sub">Video in, streaming link out. Telegram does the storing.</p>
+    <div class="card" style="max-width:380px">
+      <h2>Sign in</h2>
+      <label for="email">Email</label>
+      <input id="email" type="email" autocomplete="username">
+      <label for="pass">Password</label>
+      <input id="pass" type="password" autocomplete="current-password">
+      <button id="login-btn">Sign in</button>
+      <p class="msg" id="login-msg"></p>
+    </div>
+  </section>
+
+  <!-- app -->
+  <section id="app-view" class="hidden">
+    <div class="top">
+      <div>
+        <h1>XenovraStream</h1>
+        <p class="sub" id="who"></p>
+      </div>
+      <button class="ghost" id="logout-btn">Sign out</button>
+    </div>
+
+    <div class="card" id="setup-card">
+      <h2>1. Telegram storage</h2>
+      <p class="sub" style="margin:0 0 .5rem">
+        A storage is one Telegram chat. Add the bot to a channel, make it admin, and
+        paste the chat id. Every bot you add lifts the rate limit, so more bots means
+        smoother playback and faster uploads.
+      </p>
+      <div id="storage-list"></div>
+      <div class="row">
+        <div>
+          <label for="s-name">Storage name</label>
+          <input id="s-name" placeholder="my channel">
+        </div>
+        <div>
+          <label for="s-chat">Chat id</label>
+          <input id="s-chat" placeholder="-1001234567890">
+        </div>
+      </div>
+      <button id="s-add">Add storage</button>
+      <p class="msg" id="s-msg"></p>
+    </div>
+
+    <div class="card" id="worker-card">
+      <h2>2. Bot token</h2>
+      <div class="row">
+        <div>
+          <label for="w-storage">Storage</label>
+          <select id="w-storage"></select>
+        </div>
+        <div>
+          <label for="w-name">Bot name</label>
+          <input id="w-name" placeholder="bot 1">
+        </div>
+      </div>
+      <label for="w-token">Token from @BotFather</label>
+      <input id="w-token" placeholder="123456:ABC-DEF...">
+      <button id="w-add">Add bot</button>
+      <p class="msg" id="w-msg"></p>
+    </div>
+
+    <div class="card">
+      <h2>3. Upload a video</h2>
+      <div class="row">
+        <div>
+          <label for="u-storage">Storage</label>
+          <select id="u-storage"></select>
+        </div>
+        <div>
+          <label for="u-title">Title (optional)</label>
+          <input id="u-title" placeholder="defaults to the filename">
+        </div>
+      </div>
+      <label for="u-file">Video file</label>
+      <input id="u-file" type="file" accept="video/*">
+      <button id="u-btn">Upload</button>
+      <progress id="u-prog" class="hidden" value="0" max="100"></progress>
+      <p class="msg" id="u-msg"></p>
+    </div>
+
+    <div class="card">
+      <h2>Your videos</h2>
+      <table>
+        <thead>
+          <tr><th>Title</th><th>Status</th><th>Link</th><th></th></tr>
+        </thead>
+        <tbody id="videos"></tbody>
+      </table>
+      <p class="msg" id="v-msg"></p>
+    </div>
+  </section>
+</div>
+
+<script>
+(function () {
+  var TOKEN_KEY = 'xs_token';
+  var token = localStorage.getItem(TOKEN_KEY);
+  var pollTimer = null;
+
+  var $ = function (id) { return document.getElementById(id); };
+
+  function say(el, text, kind) {
+    el.textContent = text || '';
+    el.className = 'msg' + (kind ? ' ' + kind : '');
+  }
+
+  function api(path, opts) {
+    opts = opts || {};
+    opts.headers = opts.headers || {};
+    if (token) opts.headers['Authorization'] = 'Bearer ' + token;
+    if (opts.json) {
+      opts.headers['Content-Type'] = 'application/json';
+      opts.body = JSON.stringify(opts.json);
+      delete opts.json;
+    }
+    return fetch('/api' + path, opts).then(function (r) {
+      if (r.status === 401) { logout(); throw new Error('session expired'); }
+      if (!r.ok) return r.text().then(function (t) { throw new Error(t || r.statusText); });
+      return r.status === 204 ? null : r.json();
+    });
+  }
+
+  // -- auth ---------------------------------------------------------------
+
+  function showApp() {
+    $('login-view').classList.add('hidden');
+    $('app-view').classList.remove('hidden');
+    refreshStorages();
+    refreshVideos();
+    // Transcoding runs for minutes; poll so the status column stays live.
+    pollTimer = setInterval(refreshVideos, 4000);
+  }
+
+  function logout() {
+    localStorage.removeItem(TOKEN_KEY);
+    token = null;
+    if (pollTimer) clearInterval(pollTimer);
+    $('app-view').classList.add('hidden');
+    $('login-view').classList.remove('hidden');
+  }
+
+  $('login-btn').addEventListener('click', function () {
+    var btn = this;
+    btn.disabled = true;
+    say($('login-msg'), 'Signing in…');
+
+    fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: $('email').value, password: $('pass').value })
+    })
+      .then(function (r) {
+        if (!r.ok) throw new Error('wrong email or password');
+        return r.json();
+      })
+      .then(function (data) {
+        token = data.access_token;
+        localStorage.setItem(TOKEN_KEY, token);
+        say($('login-msg'), '');
+        showApp();
+      })
+      .catch(function (e) { say($('login-msg'), e.message, 'err'); })
+      .finally(function () { btn.disabled = false; });
+  });
+
+  $('logout-btn').addEventListener('click', logout);
+
+  // -- storages & bots ----------------------------------------------------
+
+  function refreshStorages() {
+    return api('/storages').then(function (data) {
+      var list = data.storages || data || [];
+      var opts = list.map(function (s) {
+        return '<option value="' + s.id + '">' + escapeHtml(s.name) + '</option>';
+      }).join('');
+      $('w-storage').innerHTML = opts;
+      $('u-storage').innerHTML = opts;
+      $('storage-list').innerHTML = list.length
+        ? '<p class="msg">' + list.length + ' storage(s) configured.</p>'
+        : '';
+    }).catch(function (e) { say($('s-msg'), e.message, 'err'); });
+  }
+
+  $('s-add').addEventListener('click', function () {
+    say($('s-msg'), 'Adding…');
+    api('/storages', {
+      method: 'POST',
+      json: { name: $('s-name').value, chat_id: parseInt($('s-chat').value, 10) }
+    })
+      .then(function () {
+        say($('s-msg'), 'Storage added.', 'ok');
+        $('s-name').value = '';
+        $('s-chat').value = '';
+        refreshStorages();
+      })
+      .catch(function (e) { say($('s-msg'), e.message, 'err'); });
+  });
+
+  $('w-add').addEventListener('click', function () {
+    say($('w-msg'), 'Adding…');
+    api('/storage_workers', {
+      method: 'POST',
+      json: {
+        name: $('w-name').value,
+        token: $('w-token').value,
+        storage_id: $('w-storage').value
+      }
+    })
+      .then(function () {
+        say($('w-msg'), 'Bot added.', 'ok');
+        $('w-name').value = '';
+        $('w-token').value = '';
+      })
+      .catch(function (e) { say($('w-msg'), e.message, 'err'); });
+  });
+
+  // -- upload -------------------------------------------------------------
+
+  $('u-btn').addEventListener('click', function () {
+    var file = $('u-file').files[0];
+    if (!file) { say($('u-msg'), 'Pick a video first.', 'err'); return; }
+    var storageId = $('u-storage').value;
+    if (!storageId) { say($('u-msg'), 'Add a storage first.', 'err'); return; }
+
+    var form = new FormData();
+    form.append('title', $('u-title').value);
+    form.append('file', file);
+
+    var btn = this;
+    var prog = $('u-prog');
+    btn.disabled = true;
+    prog.classList.remove('hidden');
+    prog.value = 0;
+
+    // XHR rather than fetch: it is still the only way to get upload progress,
+    // and these files are big enough that a silent bar matters.
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/videos/upload/' + storageId);
+    xhr.setRequestHeader('Authorization', 'Bearer ' + token);
+
+    xhr.upload.onprogress = function (e) {
+      if (!e.lengthComputable) return;
+      prog.value = (e.loaded / e.total) * 100;
+      say($('u-msg'), 'Uploading ' + Math.round(prog.value) + '%…');
+    };
+
+    xhr.onload = function () {
+      btn.disabled = false;
+      prog.classList.add('hidden');
+      if (xhr.status === 202) {
+        say($('u-msg'), 'Uploaded. Transcoding starts now — watch the table below.', 'ok');
+        $('u-file').value = '';
+        $('u-title').value = '';
+        refreshVideos();
+      } else {
+        say($('u-msg'), xhr.responseText || 'upload failed', 'err');
+      }
+    };
+
+    xhr.onerror = function () {
+      btn.disabled = false;
+      prog.classList.add('hidden');
+      say($('u-msg'), 'Upload failed.', 'err');
+    };
+
+    xhr.send(form);
+  });
+
+  // -- videos -------------------------------------------------------------
+
+  function refreshVideos() {
+    return api('/videos').then(function (videos) {
+      if (!videos.length) {
+        $('videos').innerHTML = '<tr><td colspan="4" class="msg">Nothing uploaded yet.</td></tr>';
+        return;
+      }
+      $('videos').innerHTML = videos.map(function (v) {
+        var link = location.origin + '/s/' + v.public_id;
+        var status = v.status === 'ready'
+          ? '<span class="pill ready">ready</span>'
+          : v.status === 'failed'
+            ? '<span class="pill failed" title="' + escapeHtml(v.error || '') + '">failed</span>'
+            : '<span class="pill ' + v.status + '">' + v.status + ' ' + v.progress + '%</span>';
+        var linkCell = v.status === 'ready'
+          ? '<a href="' + link + '" target="_blank">open</a> · ' +
+            '<a href="#" data-copy="' + link + '">copy</a>'
+          : '—';
+        return '<tr>' +
+          '<td>' + escapeHtml(v.title) + '</td>' +
+          '<td>' + status + '</td>' +
+          '<td>' + linkCell + '</td>' +
+          '<td><a href="#" data-del="' + v.id + '">delete</a></td>' +
+          '</tr>';
+      }).join('');
+    }).catch(function (e) { say($('v-msg'), e.message, 'err'); });
+  }
+
+  $('videos').addEventListener('click', function (e) {
+    var copy = e.target.getAttribute('data-copy');
+    var del = e.target.getAttribute('data-del');
+
+    if (copy) {
+      e.preventDefault();
+      navigator.clipboard.writeText(copy)
+        .then(function () { say($('v-msg'), 'Link copied.', 'ok'); })
+        .catch(function () { say($('v-msg'), copy); });
+    }
+
+    if (del) {
+      e.preventDefault();
+      if (!confirm('Delete this video and its Telegram messages?')) return;
+      say($('v-msg'), 'Deleting…');
+      api('/videos/' + del, { method: 'DELETE' })
+        .then(function () { say($('v-msg'), 'Deleted.', 'ok'); refreshVideos(); })
+        .catch(function (err) { say($('v-msg'), err.message, 'err'); });
+    }
+  });
+
+  function escapeHtml(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  if (token) showApp();
+})();
+</script>
 </body>
-
 </html>

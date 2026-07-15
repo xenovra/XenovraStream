@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>XenovraStream</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    background: #0b0d10;
+    color: #e8eaed;
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+    padding: 1rem;
+  }
+  .wrap { width: 100%; max-width: 1100px; }
+  video {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    background: #000;
+    border-radius: 10px;
+    display: block;
+  }
+  .bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-top: .75rem;
+    flex-wrap: wrap;
+  }
+  h1 { font-size: 1.05rem; font-weight: 600; margin: 0; }
+  select {
+    background: #171a1f;
+    color: #e8eaed;
+    border: 1px solid #2b3038;
+    border-radius: 6px;
+    padding: .35rem .5rem;
+    font: inherit;
+  }
+  .msg { color: #9aa3ae; text-align: center; }
+  .msg.err { color: #ff8a8a; }
+  a.brand { color: #6ea8ff; text-decoration: none; font-size: .85rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <video id="v" controls playsinline></video>
+  <div class="bar">
+    <h1 id="title">Loading…</h1>
+    <div>
+      <label for="q" style="font-size:.85rem;color:#9aa3ae">Quality</label>
+      <select id="q"><option value="-1">Auto</option></select>
+    </div>
+  </div>
+  <p class="msg" id="msg"></p>
+  <p style="text-align:center"><a class="brand" href="/">XenovraStream</a></p>
+</div>
+
+<script src="/assets/hls.min.js"></script>
+<script>
+(function () {
+  var publicId = location.pathname.split('/').filter(Boolean).pop();
+  var video = document.getElementById('v');
+  var titleEl = document.getElementById('title');
+  var msgEl = document.getElementById('msg');
+  var qEl = document.getElementById('q');
+  var src = '/api/stream/' + encodeURIComponent(publicId) + '/master.m3u8';
+
+  function say(text, isError) {
+    msgEl.textContent = text || '';
+    msgEl.className = 'msg' + (isError ? ' err' : '');
+  }
+
+  fetch('/api/public/' + encodeURIComponent(publicId))
+    .then(function (r) {
+      if (!r.ok) throw new Error(r.status === 409 ? 'still processing' : 'not found');
+      return r.json();
+    })
+    .then(function (meta) {
+      titleEl.textContent = meta.title;
+      document.title = meta.title + ' — XenovraStream';
+    })
+    .catch(function (e) {
+      titleEl.textContent = 'Unavailable';
+      say(e.message === 'still processing'
+        ? 'This video is still being processed. Refresh in a moment.'
+        : 'This video does not exist.', true);
+    });
+
+  if (window.Hls && Hls.isSupported()) {
+    var hls = new Hls({ enableWorker: true });
+    hls.loadSource(src);
+    hls.attachMedia(video);
+
+    hls.on(Hls.Events.MANIFEST_PARSED, function (_e, data) {
+      data.levels.forEach(function (level, i) {
+        var opt = document.createElement('option');
+        opt.value = i;
+        opt.textContent = level.height + 'p';
+        qEl.appendChild(opt);
+      });
+    });
+
+    qEl.addEventListener('change', function () {
+      // -1 hands control back to hls.js's own bandwidth estimation.
+      hls.currentLevel = parseInt(qEl.value, 10);
+    });
+
+    hls.on(Hls.Events.ERROR, function (_e, data) {
+      if (!data.fatal) return;
+      // Network and media errors are usually recoverable — a segment can be
+      // slow when it is cold and has to come back from Telegram.
+      if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+        say('Buffering…');
+        hls.startLoad();
+      } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+        hls.recoverMediaError();
+      } else {
+        say('Playback failed.', true);
+        hls.destroy();
+      }
+    });
+
+    video.addEventListener('playing', function () { say(''); });
+  } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+    // Safari plays HLS natively and picks its own rendition.
+    video.src = src;
+    qEl.style.display = 'none';
+  } else {
+    say('Your browser cannot play HLS.', true);
+  }
+})();
+</script>
+</body>
+</html>

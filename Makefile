@@ -4,5 +4,11 @@ up:
 down:
 	docker compose down
 
-run_ui:
-	cd ui && pnpm run dev || cd -
+logs:
+	docker compose logs -f xenovrastream
+
+test:
+	cd xenovrastream && cargo test
+
+check:
+	cd xenovrastream && cargo check && cargo clippy

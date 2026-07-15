@@ -1,210 +1,141 @@
-![xenovradrive-github-logo](https://github.com/Xenovra/XenovraDrive/assets/55978340/db39e76f-4119-41c1-bbfd-9b59f40ab626)
+# XenovraStream
 
-[<img alt="GitHub Workflow Status (with event)" src="https://img.shields.io/github/actions/workflow/status/xenovra/XenovraDrive/docker-image.yml?style=plastic&logo=github">](https://github.com/xenovra/XenovraDrive/actions)
-[<img alt="Latest release" src="https://img.shields.io/github/v/release/xenovra/XenovraDrive?style=plastic&logo=github&color=success">](https://github.com/xenovra/XenovraDrive/releases)
-[<img alt="Dockerhub latest" src="https://img.shields.io/badge/dockerhub-latest-blue?logo=docker&style=plastic">](https://hub.docker.com/r/xenovra/xenovradrive)
-[<img alt="GitHub Packages" src="https://img.shields.io/badge/ghcr.io-latest-24292e?logo=github&style=plastic">](https://github.com/xenovra/XenovraDrive/pkgs/container/xenovradrive)
-[<img alt="Docker Image Size (tag)" src="https://img.shields.io/docker/image-size/xenovra/xenovradrive/latest?style=plastic&logo=docker&color=gold">](https://hub.docker.com/r/xenovra/xenovradrive/tags?page=1&name=latest)
-[<img alt="Any platform" src="https://img.shields.io/badge/platform-any-green?style=plastic&logo=linux&logoColor=white">](https://github.com/xenovra/XenovraDrive)
+Upload a video, get a streaming link. **Telegram** is the storage backend.
 
-_Lightweight, self-hosted cloud storage that uses **Telegram** as its storage backend — so it doesn't consume your server filesystem or any paid cloud storage underneath the hood._
+A video-only sibling of [XenovraDrive](https://codeberg.org/xenovra/XenovraDrive):
+where the drive stores arbitrary files as 20 MiB chunks, XenovraStream transcodes
+video into an adaptive HLS ladder and stores each segment as its own Telegram
+message. You get back a single unlisted link — `/s/<id>` — that plays in any
+browser, adapts to the viewer's bandwidth, and needs no account to watch.
 
-XenovraDrive is aimed to take as small disk space as possible. It does not need any code interpreter/platform to run — the whole app is a **`FROM scratch` binary just a few megabytes in size**. It uses Postgres as a database and tries hard to economize space by not creating unneeded fields and tables and by picking proper datatypes.
+```
+upload ──► disk ──► queue ──► ffmpeg (360p/720p/1080p) ──► segments ──► Telegram
+                                                                           │
+  viewer ◄── hls.js ◄── m3u8 + segment proxy ◄── disk cache ◄──────────────┘
+```
 
-The platform can be used as a personal drive (on your own server or a local machine) or as a multi-user platform with multiple storages. Since it also exposes a REST API, you can use it as a storage layer in your backend, similar to [NextCloud](https://nextcloud.com/), [AWS S3](https://aws.amazon.com/s3/) or S3-compatible services like [MinIO](https://min.io/).
+## ✨ What it does
 
-## ✨ Features
+- **Adaptive bitrate** — every upload is transcoded to 360p, 720p and 1080p, never
+  above the source resolution. The player switches rendition on the fly as
+  bandwidth changes; viewers can also pick a quality by hand.
+- **Unlisted public links** — `/s/<20-hex-chars>`, shareable, no login to watch,
+  not enumerable. Holding the link is the authorisation.
+- **A real job queue** — transcoding is a row in `transcode_jobs`, not an
+  in-memory channel. A restart mid-transcode re-queues the job instead of losing
+  the upload.
+- **Streaming upload** — multipart goes straight to disk, chunk by chunk. A 10 GB
+  file costs 10 GB of disk and almost no RAM.
+- **Segment cache** — fetched segments are cached on disk and served from there,
+  with a read-ahead on the next two. This is what makes playback viable at all;
+  see below.
+- **Delete syncs to Telegram** — removing a video removes every segment message
+  from the chat, not just the database rows.
+- **Multiple bots per storage** — each bot token added to a storage lifts the
+  rate limit, which is the main scaling knob.
 
-- **Telegram-backed storage** — files are split into chunks and stored in a Telegram channel through a bot, so you pay nothing for storage.
-- **Unlimited file size** — files are chunked on upload and reassembled on download, working around Telegram's per-file limit.
-- **Clean, modern web UI** (SolidJS) — responsive interface with folders, file/folder info, and a polished light theme.
-- **Live upload progress bar** — real-time browser→server progress, then a "processing" state while the server forwards the file to Telegram.
-- **Delete syncs to Telegram** — removing a file (or a whole folder) also deletes its underlying messages from the Telegram channel, so nothing is left behind.
-- **Per-user access control** — grant, change or revoke access to a storage per user (Viewer / Can edit / Admin).
-- **Multiple storage workers** — add more Telegram bots to a storage to work around per-bot rate limits and upload/download faster.
-- **JWT authentication** with automatic superuser bootstrap on first run.
-- **Tiny & portable** — a multi-megabyte static image that runs anywhere Docker does; published to both Docker Hub and GitHub Packages.
+## ⚡ Why the cache is not optional
+
+Reading one segment back costs **two rate-limited Telegram calls** — `getFile` for
+the path, then the download itself — and a bot token allows `TELEGRAM_RATE_LIMIT`
+(default 18) calls per minute. Uncached, a single viewer on 6-second segments
+burns ~20 calls/min and stalls; a second viewer of the same video doubles it.
+
+With the cache, a segment costs Telegram exactly once no matter how many people
+watch it. Two levers if you need more headroom:
+
+- **Add more bots to a storage.** The limiter is per bot token, so N bots means N×
+  the ceiling.
+- **Raise `CACHE_MAX_MB`.** A cache that holds your popular videos end-to-end
+  means Telegram is only touched on a cold first play.
 
 ## 🚀 Installation
 
-This project is aimed at running the app in a container, so the primary way to run it is via [Docker](https://www.docker.com/). You can also build it from source.
-
-> **NOTE:** XenovraDrive uses [Postgres](https://www.postgresql.org/) as a database. If you run it from source or run only the XenovraDrive image, you need a Postgres instance running and reachable on your network.
-
-### Pull the image
-
-```sh
-# GitHub Packages (ghcr.io)
-docker pull ghcr.io/xenovra/xenovradrive:latest
-
-# or Docker Hub
-docker pull xenovra/xenovradrive:latest
-```
-
-<details>
-  <summary><b>Docker Compose with pre-built image</b> <i>(recommended)</i></summary>
-
-The simplest way to run and manage the app.
-
-1. Create a directory for the app and enter it:
-
-```sh
-mkdir xenovradrive && cd xenovradrive
-```
-
-2. Add a `docker-compose.yml`:
-
-```yaml
-volumes:
-  xenovradrive-db-volume:
-    name: xenovradrive-db-volume
-
-services:
-  xenovradrive:
-    container_name: xenovradrive
-    image: ghcr.io/xenovra/xenovradrive:latest   # or xenovra/xenovradrive:latest
-    env_file:
-      - .env
-    ports:
-      - ${PORT}:8000
-    restart: unless-stopped
-    depends_on:
-      - db
-
-  db:
-    container_name: xenovradrive_db
-    image: postgres:15.0-alpine
-    environment:
-      POSTGRES_USER: ${DATABASE_USER}
-      POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
-    restart: unless-stopped
-    volumes:
-      - xenovradrive-db-volume:/var/lib/postgresql/data
-```
-
-3. Add a `.env` file. **Set your own superuser email, password and secret key**:
-
-```env
-PORT=8000
-WORKERS=4
-CHANNEL_CAPACITY=32
-SUPERUSER_EMAIL=<YOUR-EMAIL>
-SUPERUSER_PASS=<YOUR-PASSWORD>
-ACCESS_TOKEN_EXPIRE_IN_SECS=1800
-REFRESH_TOKEN_EXPIRE_IN_DAYS=14
-SECRET_KEY=<YOUR-SECRET-KEY>
-TELEGRAM_API_BASE_URL=https://api.telegram.org
-
-DATABASE_USER=xenovradrive
-DATABASE_PASSWORD=xenovradrive
-DATABASE_NAME=xenovradrive
-DATABASE_HOST=db
-DATABASE_PORT=5432
-```
-
-Generate a strong secret key with:
-
-```sh
-openssl rand -hex 32
-```
-
-4. Run it:
-
-```sh
-docker compose up -d
-```
-
-Open http://localhost:8000 (or `http://<YOUR-PUBLIC-IP>:8000` on a server) and sign in with your superuser credentials. Check logs with `docker logs -f xenovradrive`.
-
-</details>
-
-<details>
-  <summary><b>Docker Compose from source</b></summary>
-
-Aimed at the development process.
-
-```sh
-git clone git@github.com:xenovra/XenovraDrive.git
-cd XenovraDrive
-cp ./.env.example ./.env   # then edit it
+```bash
+git clone https://codeberg.org/xenovra/XenovraStream.git
+cd XenovraStream
+cp .env.example .env    # edit SECRET_KEY, SUPERUSER_PASS, DATABASE_PASSWORD
 make up
 ```
 
-Open http://localhost:8000 and check logs with `docker logs -f xenovradrive`.
+Or straight from the published image:
 
-</details>
-
-<details>
-  <summary><b>From source</b></summary>
-
-The most involved way. Requires [Cargo](https://github.com/rust-lang/cargo), [Node.js](https://nodejs.org/en), [pnpm](https://pnpm.io/) and [Postgres](https://www.postgresql.org/).
-
-```sh
-git clone git@github.com:xenovra/XenovraDrive.git
-cd XenovraDrive
-
-# build the server
-cd xenovradrive && cargo build --release && cd ..
-
-# build the UI
-cd ui && pnpm install && VITE_API_BASE=/api pnpm run build && cd ..
+```bash
+docker pull ghcr.io/xenovra/xenovrastream:latest
 ```
 
-Serve the built UI (`ui/dist`) next to the binary, make sure Postgres is reachable, set the environment variables from [.env.example](https://github.com/xenovra/XenovraDrive/blob/main/.env.example), then run the `xenovradrive` binary.
+Then open `http://localhost:8000`, sign in as the superuser, and:
 
-</details>
+1. **Add a storage** — a Telegram channel. Create the channel, add your bot as an
+   admin, and paste the chat id (e.g. `-1001234567890`).
+2. **Add a bot token** from [@BotFather](https://t.me/botfather). Add several to
+   the same storage; each one raises the rate limit.
+3. **Upload a video.** The table shows transcode progress; when it flips to
+   `ready`, copy the link.
 
-<br/>
+## ⚙️ Configuration
 
-It's recommended to put a HTTP reverse-proxy like [Nginx](https://www.nginx.com/) or [Traefik](https://traefik.io/traefik/) in front of the app for TLS.
+Everything is environment variables — see [.env.example](.env.example). The ones
+that matter for streaming:
 
-## 📖 Usage
+| Variable | Default | Notes |
+|---|---|---|
+| `WORK_DIR` | `/var/lib/xenovrastream` | Uploads, ffmpeg scratch, segment cache. Needs room for the largest source plus its renditions. |
+| `CACHE_MAX_MB` | `4096` | Segment cache ceiling. Bigger is better. |
+| `SEGMENT_SECS` | `6` | Shorter seeks faster, but multiplies Telegram calls per minute of playback. |
+| `TELEGRAM_RATE_LIMIT` | `18` | Calls/min **per bot token**. |
+| `X264_PRESET` | `veryfast` | `medium` buys ~15% bitrate for ~3x the transcode time. |
+| `UPLOAD_CONCURRENCY` | `4` | Segments pushed to Telegram at once. |
 
-The platform is built around the **"storage"** concept. Every storage is a separate file system, like different volumes on a drive — you can create files and folders, download files, view file/folder info and delete them, much like Google Drive. Each storage is backed by its own Telegram channel where the data actually lives.
+## ⏱️ Transcode cost
 
-Storages use **"storage workers"** — Telegram bots that upload and download files through the Telegram API. Add the bot to your channel as an **administrator with permission to post and delete messages**.
+CPU-only H.264 encoding, three renditions, no GPU. On 6 cores at `veryfast`,
+budget roughly **1-2x realtime per rendition** — a 10-minute video lands in about
+15-25 minutes total. Jobs run one at a time on purpose: ffmpeg already saturates
+every core, so running two would only make both slower.
 
-### Telegram API limitations & how XenovraDrive works around them
+If that is too slow, `X264_PRESET=superfast` or dropping to a single rendition are
+the levers.
 
-- **Rate limits (RPM):** add extra storage workers (bots) to a storage to spread the load and upload/download faster. One user can create up to 20 bots.
-- **File size:** Telegram caps single files, so XenovraDrive splits uploads into chunks, stores them separately, and reassembles them on download — allowing effectively unlimited file sizes.
+## 🔌 API
 
-### In-storage features
+Authenticated (`Authorization: Bearer <jwt>`):
 
-- [x] Upload file (with live progress)
-- [x] Download file
-- [x] Create folder
-- [x] Get file / folder info
-- [x] Delete file / folder (also removes the data from Telegram)
+| Route | |
+|---|---|
+| `POST /api/auth/login` | `{email, password}` → `{access_token}` |
+| `POST /api/videos/upload/:storage_id` | multipart `file` + `title` → `202` + video |
+| `GET /api/videos` | your videos, with status and progress |
+| `DELETE /api/videos/:id` | drops rows *and* Telegram messages |
 
-### Access control
+Public — no auth, the link is the credential:
 
-Manage access to your storages by granting access to other users. Three roles are available:
+| Route | |
+|---|---|
+| `GET /s/:public_id` | player page |
+| `GET /api/public/:public_id` | title + duration |
+| `GET /api/stream/:public_id/master.m3u8` | master playlist |
+| `GET /api/stream/:public_id/:rendition/index.m3u8` | media playlist |
+| `GET /api/stream/:public_id/:rendition/:n.ts` | segment (cache → Telegram) |
 
-- **Viewer**
-- **Can edit**
-- **Admin**
+## 🧱 Stack
 
-You can grant, change or revoke (delete) access for other users at any time.
+Rust · axum 0.6 · sqlx/Postgres · ffmpeg · hls.js. The UI is plain static HTML —
+no bundler, no build step.
 
-## 🗺️ Future plans
+## 🧭 Known limits
 
-Planned and considered improvements (contributions welcome):
+- **One transcode at a time.** Fine for personal use; a busy instance would want
+  the job table drained by several workers (the `SKIP LOCKED` claim already
+  supports it).
+- **No automatic retry.** A failed job stays failed and its source is dropped;
+  re-upload to try again.
+- **Telegram's 20 MB download cap** bounds segment size. At 6s segments and a
+  5 Mbps 1080p rendition there is plenty of headroom, but very long segments at
+  very high bitrates would hit it.
+- **VOD only** — no thumbnails, no subtitles, no live.
 
-- [ ] Move / rename files and folders
-- [ ] Multi-file and drag-and-drop uploads
-- [ ] Resumable and parallel chunk transfers for higher throughput
-- [ ] Trash / recycle bin before permanent deletion
-- [ ] Search within a storage
-- [ ] File previews and thumbnails (images, video, PDF)
-- [ ] Public / password-protected share links
-- [ ] Dark mode for the web UI
-- [ ] Storage usage stats and quotas per user
-- [ ] Documented, stable public REST API + client SDKs
-- [ ] Optional S3-compatible API layer
+## 📄 Licence
 
-Have an idea or a feature you'd like to see? Open an issue — feedback drives the roadmap.
-
-## 🤝 Contributing
-
-Highly welcome! Open issues or pick existing ones and send PRs.
+MIT — see [LICENSE](LICENSE). Derived from
+[Pentaract](https://github.com/Dominux/Pentaract) by Dominux, via XenovraDrive.

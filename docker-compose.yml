@@ -1,17 +1,18 @@
-version: "3.9"
-
 volumes:
-  xenovradrive-db-volume:
-    name: xenovradrive-db-volume
+  xenovrastream-db-volume:
+    name: xenovrastream-db-volume
+  # Uploads waiting to transcode, ffmpeg scratch space, and the segment cache.
+  xenovrastream-work-volume:
+    name: xenovrastream-work-volume
 
 networks:
-  xenovradrive-network:
-    name: xenovradrive-network
+  xenovrastream-network:
+    name: xenovrastream-network
 
 services:
-  xenovradrive:
-    container_name: xenovradrive
-    image: xenovradrive
+  xenovrastream:
+    container_name: xenovrastream
+    image: xenovrastream
     build: .
     env_file:
       - .env
@@ -19,12 +20,15 @@ services:
       - ${PORT}:8000
     restart: unless-stopped
     depends_on:
-      - db
+      db:
+        condition: service_healthy
+    volumes:
+      - xenovrastream-work-volume:/var/lib/xenovrastream
     networks:
-      - xenovradrive-network
+      - xenovrastream-network
 
   db:
-    container_name: xenovradrive_db
+    container_name: xenovrastream_db
     image: postgres:15.0-alpine
     environment:
       POSTGRES_USER: ${DATABASE_USER}
@@ -36,6 +40,6 @@ services:
       timeout: 5s
       retries: 10
     volumes:
-      - xenovradrive-db-volume:/var/lib/postgresql/data
+      - xenovrastream-db-volume:/var/lib/postgresql/data
     networks:
-      - xenovradrive-network
+      - xenovrastream-network

@@ -10,8 +10,19 @@ permissions:
   packages: write
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Test
+        working-directory: ./xenovrastream
+        run: cargo test --locked
+
   build-and-publish:
     runs-on: ubuntu-latest
+    needs: test
 
     steps:
       - name: Checkout
@@ -29,7 +40,7 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           # ghcr image names must be lowercase
-          images: ghcr.io/xenovra/xenovradrive
+          images: ghcr.io/xenovra/xenovrastream
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
             type=ref,event=tag
