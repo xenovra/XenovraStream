@@ -1,0 +1,8 @@
+# Build artifacts — the image builds its own; shipping a local target/ into the
+# context is gigabytes of pointless transfer and can OOM the daemon.
+xenovrastream/target/
+target/
+
+.git/
+.env
+*.log

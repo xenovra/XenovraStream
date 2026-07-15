@@ -16,8 +16,10 @@ services:
     build: .
     env_file:
       - .env
+    # Both sides use ${PORT}: the app binds it inside the container too, so
+    # hardcoding the container side would only work when PORT happens to be 8000.
     ports:
-      - ${PORT}:8000
+      - ${PORT}:${PORT}
     restart: unless-stopped
     depends_on:
       db:
