@@ -159,6 +159,11 @@
 
     <div class="card">
       <h2>Your videos</h2>
+      <p class="sub" style="margin:0 0 .75rem">
+        <code>/s/&lt;id&gt;</code> opens the player. The same link with
+        <code>.m3u8</code> on the end is the HLS playlist — paste that into VLC,
+        ffmpeg, or your own player.
+      </p>
       <table>
         <thead>
           <tr><th>Title</th><th>Status</th><th>Link</th><th></th></tr>
@@ -360,9 +365,12 @@
           : v.status === 'failed'
             ? '<span class="pill failed" title="' + escapeHtml(v.error || '') + '">failed</span>'
             : '<span class="pill ' + v.status + '">' + v.status + ' ' + v.progress + '%</span>';
+        // The .m3u8 form of the same link is what goes into VLC, ffmpeg, or an
+        // <video> tag elsewhere — worth surfacing, not just the player page.
         var linkCell = v.status === 'ready'
           ? '<a href="' + link + '" target="_blank">open</a> · ' +
-            '<a href="#" data-copy="' + link + '">copy</a>'
+            '<a href="#" data-copy="' + link + '">copy link</a> · ' +
+            '<a href="#" data-copy="' + link + '.m3u8">copy .m3u8</a>'
           : '—';
         return '<tr>' +
           '<td>' + escapeHtml(v.title) + '</td>' +

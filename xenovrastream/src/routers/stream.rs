@@ -41,7 +41,7 @@ impl StreamRouter {
             .with_state(state)
     }
 
-    async fn master(
+    pub async fn master(
         State(state): State<Arc<AppState>>,
         Path(public_id): Path<String>,
     ) -> impl IntoResponse {
@@ -175,9 +175,21 @@ impl StreamRouter {
     }
 }
 
-/// `/s/<public_id>` — the shareable page. Serves the player shell; the video id
-/// is read from the URL by the page itself.
-pub async fn player_page() -> impl IntoResponse {
+/// `/s/<public_id>` — the shareable link.
+///
+/// Serves the player page normally, but `/s/<public_id>.m3u8` returns the master
+/// playlist itself, so the same link people share also drops straight into VLC,
+/// ffmpeg, or any external player without going through the browser UI.
+pub async fn share_link(
+    State(state): State<Arc<AppState>>,
+    Path(public_id): Path<String>,
+) -> axum::response::Response {
+    if let Some(id) = public_id.strip_suffix(".m3u8") {
+        return StreamRouter::master(State(state), Path(id.to_owned()))
+            .await
+            .into_response();
+    }
+
     match tokio::fs::read_to_string("ui/player.html").await {
         Ok(html) => axum::response::Html(html).into_response(),
         Err(e) => {

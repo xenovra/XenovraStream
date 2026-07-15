@@ -113,6 +113,7 @@ Public — no auth, the link is the credential:
 | Route | |
 |---|---|
 | `GET /s/:public_id` | player page |
+| `GET /s/:public_id.m3u8` | the same link as a playlist — drop it into VLC, ffmpeg, or your own player |
 | `GET /api/public/:public_id` | title + duration |
 | `GET /api/stream/:public_id/master.m3u8` | master playlist |
 | `GET /api/stream/:public_id/:rendition/index.m3u8` | media playlist |

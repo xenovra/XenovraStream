@@ -31,8 +31,12 @@ impl Server {
         let router = Router::new()
             .nest("/api", Self::build_api_router(workers, app_state.clone()))
             // The shareable link. Kept short and outside /api because it is the
-            // thing people actually paste around.
-            .route("/s/:public_id", get(stream::player_page))
+            // thing people actually paste around. `.m3u8` on the end of the same
+            // link yields the playlist for external players.
+            .route(
+                "/s/:public_id",
+                get(stream::share_link).with_state(app_state),
+            )
             .nest_service("/assets", serve_assets)
             .fallback_service(serve_ui);
 

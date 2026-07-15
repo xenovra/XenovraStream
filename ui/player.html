@@ -48,6 +48,35 @@
   .msg { color: #9aa3ae; text-align: center; }
   .msg.err { color: #ff8a8a; }
   a.brand { color: #6ea8ff; text-decoration: none; font-size: .85rem; }
+  .m3u8 {
+    display: flex;
+    gap: .5rem;
+    align-items: center;
+    margin-top: .6rem;
+    font-size: .8rem;
+    color: #9aa3ae;
+  }
+  .m3u8 input {
+    flex: 1;
+    background: #12151a;
+    border: 1px solid #232830;
+    border-radius: 6px;
+    color: #c7ccd3;
+    padding: .35rem .5rem;
+    font: inherit;
+    font-family: ui-monospace, monospace;
+  }
+  .m3u8 button {
+    background: #171a1f;
+    color: #c7ccd3;
+    border: 1px solid #2b3038;
+    border-radius: 6px;
+    padding: .35rem .6rem;
+    font: inherit;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .m3u8 button:hover { border-color: #3a424e; }
 </style>
 </head>
 <body>
@@ -59,6 +88,11 @@
       <label for="q" style="font-size:.85rem;color:#9aa3ae">Quality</label>
       <select id="q"><option value="-1">Auto</option></select>
     </div>
+  </div>
+  <div class="m3u8">
+    <span>HLS</span>
+    <input id="m3u8" readonly>
+    <button id="copy">Copy</button>
   </div>
   <p class="msg" id="msg"></p>
   <p style="text-align:center"><a class="brand" href="/">XenovraStream</a></p>
@@ -73,6 +107,20 @@
   var msgEl = document.getElementById('msg');
   var qEl = document.getElementById('q');
   var src = '/api/stream/' + encodeURIComponent(publicId) + '/master.m3u8';
+
+  // The shareable `.m3u8` form, for VLC and friends.
+  var m3u8El = document.getElementById('m3u8');
+  m3u8El.value = location.origin + '/s/' + publicId + '.m3u8';
+
+  document.getElementById('copy').addEventListener('click', function () {
+    var btn = this;
+    navigator.clipboard.writeText(m3u8El.value).then(function () {
+      btn.textContent = 'Copied';
+      setTimeout(function () { btn.textContent = 'Copy'; }, 1500);
+    }).catch(function () {
+      m3u8El.select();
+    });
+  });
 
   function say(text, isError) {
     msgEl.textContent = text || '';

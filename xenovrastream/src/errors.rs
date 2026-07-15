@@ -64,6 +64,10 @@ impl From<XenovraStreamError> for (StatusCode, String) {
             | XenovraStreamError::StorageWorkerNameConflict
             | XenovraStreamError::StorageWorkerTokenConflict
             | XenovraStreamError::StorageDoesNotHaveWorkers
+            // Uploading before adding a bot is the most likely first-run
+            // mistake; it fell through to a 500 "Something went wrong", which
+            // told the user nothing about the one thing they had to do.
+            | XenovraStreamError::NoStorageWorkers
             | XenovraStreamError::CannotManageAccessOfYourself => (StatusCode::CONFLICT, e.to_string()),
             XenovraStreamError::NotAuthenticated => (StatusCode::UNAUTHORIZED, e.to_string()),
             XenovraStreamError::DoesNotExist(_) => (StatusCode::NOT_FOUND, e.to_string()),
